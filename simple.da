@@ -1,0 +1,30 @@
+import sys
+class DBServer(process):
+    def setup():
+		
+    def run():
+        #await(received(('show',)))
+        output("Request received the attr value is")
+        #send(('OK'), to = c)
+
+		
+class Client(process):
+    def setup():
+
+    def run():
+        output('Sending the request')
+        #send(('show'), to = d)
+        #await(received(('OK',)))
+        output('Request Processed successfully')
+
+
+
+def main():
+    a = new(DBServer)
+    b = new(Client)
+    config(clock = 'Lamport')
+    #setup(a,(b))
+    #setup(b,(a))
+    start(b)
+    start(a)
+		
