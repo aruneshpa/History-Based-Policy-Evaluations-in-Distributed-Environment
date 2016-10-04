@@ -1,0 +1,81 @@
+import sys
+
+class Sub_Co(process):
+    def setup():
+        self.app_id = None
+
+    def run():
+        a = False
+        await(received(('Sub',)))
+
+    def receive(msg=('Sub',subid, 'Res', resid, res_hash), from_=p):
+        self.app_id = p
+        output("Request from Application received with " + subid + " and " + resid)
+        res_coord_id = res_hash[resid]
+        output("Subject coord sending to Res Co with " + str(res_coord_id))
+        send(('Res', resid), to=res_coord_id)
+
+
+    def receive(msg=('Decision from Res_Co'), from_=p):
+        #await(received(('Decision from Res_Co',)))
+        output("Aa gaya bc!!")
+        app_id = self.app_id
+        send(('Policy Decision'), to=app_id)
+
+class Res_Co(process):
+    def setup(): pass
+
+    def run():
+        a = False
+        await(received(('Res',)))
+
+    def receive(msg=('Res',resid), from_=p):
+        output("Request from Subject_Coord received with " + resid)
+        send(('Decision from Res_Co'), to=p)
+
+
+
+class Application(process):
+    def setup(sub_hash:dict, sub_IDs:list, res_hash:dict, res_IDs:list): pass
+
+    def run():
+        sub_id = sub_IDs[1]
+        sub_coord_id = sub_hash[sub_id]
+        res_id = res_IDs[2];
+        res_coord_id = res_hash[res_id]
+        output("Sending this request to " + str(sub_coord_id))
+        send(('Sub',sub_id, 'Res', res_id, res_hash), to=sub_coord_id)
+        await(received(('Policy Decision',)))
+
+
+    def receive(msg=('Policy Decision'), from_=p):
+        output("Policy Evaluated. Done!!")
+
+
+
+
+def main():
+    num_sub_co = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    num_res_co = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    config(channel= 'fifo', clock='Lamport')
+
+    sub_co = new(Sub_Co, num =num_sub_co)
+    res_co = new(Res_Co, num =num_res_co)
+    list_sub_coords = [p for p in sub_co]
+    list_res_coords = [p for p in res_co]
+    sub_IDs = ['sub1', 'sub2', 'sub3']
+    res_IDs = ['res1', 'res2', 'res3']
+    sub_dict = {}
+    res_dict = {}
+    for i in range(3):
+        sub_dict[sub_IDs[i]] = list_sub_coords[i]
+
+    for i in range(3):
+        res_dict[res_IDs[i]] = list_res_coords[i]
+
+    app = new(Application, [sub_dict, sub_IDs, res_dict, res_IDs], num =1)
+
+    
+    start(sub_co)
+    start(res_co)
+    start(app)

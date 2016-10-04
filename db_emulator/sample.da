@@ -1,0 +1,43 @@
+import sys
+
+class Sub_Co(process):
+    def setup(): pass
+
+    def run():
+        a = False
+        await(received(('Sub',)))
+
+    def receive(msg=('Sub',subid,'Res',resid,), from_=p):
+        output("Request from Application received with " + subid + " and " + resid)
+        send(('Policy Decision',subid,resid), to=p)
+
+
+
+
+
+
+class Application(process):
+    def setup(p:Sub_Co): pass
+
+    def run():
+        send(('Sub','Sub1','Res','Res1'), to=p)
+        await(received(('Policy Decision',)))
+
+
+    def receive(msg=('Policy Decision',subid,resid,), from_=p):
+        output("Policy Evaluated. Done!! for " + subid + " and " + resid)
+
+
+
+
+def main():
+    #num = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    config(channel= 'fifo', clock='Lamport')
+
+    sub_co = new(Sub_Co, num =1)
+    app = new(Application, num =3)
+    setup(app, sub_co)
+
+
+    start(sub_co)
+    start(app)
