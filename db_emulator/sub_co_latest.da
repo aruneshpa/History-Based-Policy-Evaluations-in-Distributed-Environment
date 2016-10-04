@@ -1,0 +1,126 @@
+import sys
+import random
+
+
+class Sub_Co(process):
+    def setup():
+        self.app_id = None
+
+    def run():
+        await(some(received(('Sub',))))
+
+    def receive(msg=('Sub',sub_id, 'Res', res_id, 'Master', master ), from_=p):
+        self.app_id = p
+        output("Request from Application received with " + sub_id + " and " + res_id)
+        res_hash = master.res_dict
+        res_coord_id = res_hash[res_id]
+        output("Subject coord sending to Res Co with " + str(res_coord_id))
+        send(('Sub', sub_id, 'Res', res_id, 'Master', master), to=res_coord_id)
+
+
+    def receive(msg=('Decision from Worker'), from_=p):
+        output("Aa gaya bc!!")
+        app_id = self.app_id
+        send(('Policy Decision'), to=app_id)
+
+
+class Worker(process):
+    def setup(): pass
+
+    def run():
+        a = False
+        await(received(('Sub',)))
+
+    def receive(msg=('Sub',sub_id, 'Res', res_id, 'Master', master), from_=p):
+        output("Request from Resource_Coord received with " + sub_id + " and " + res_id)
+        sub_hash = master.sub_dict
+        send(('Decision from Worker'), to=sub_hash[sub_id])
+
+class Res_Co(process):
+    def setup(workers:list): pass
+
+    def run():
+        await(received(('Sub',)))
+
+    def receive(msg=('Sub', sub_id, 'Res',res_id, 'Master', master), from_=p):
+        output("Request from Subject_Coord received with " + res_id)
+        w_num = random.randint(0,len(workers))
+        w_id = workers[w_num]
+        output("Sending request to Worker " + w_id)
+        send(('Sub',sub_id,'Res', res_id, 'Master', master), to=w_id)
+
+
+class Application(process):
+    def setup(sub_id:int, res_id:int, master:Master): pass
+
+    def run():
+        sub_hash = master.sub_dict
+        sub_coord_id = sub_hash[sub_id]
+        output("Sending this request to " + str(sub_coord_id))
+        send(('Sub',sub_id, 'Res', res_id, 'Master', master), to=sub_coord_id)
+        await(received(('Policy Decision',)))
+
+
+    def receive(msg=('Policy Decision'), from_=p):
+        output("Policy Evaluated. Done!!")
+
+class Master(process):
+    def setup(num_sub_co:int, num_res_co:int, num_workers:int, num_sub_attrs:int, num_res_atts:int): 
+        self.sub_dict = dict()
+        self.res_dict = dict()
+
+    def initialize():
+        sub_attrs = ['Sub1', 'Sub2', 'Sub3', 'Sub4', 'Sub5']
+        res_attrs = ['Res1', 'Res2', 'Res3', 'Res4', 'Res5']
+        worker = new(Worker, num =num_workers)
+        workers = [w for w in worker]
+    
+        sub_co = new(Sub_Co, num =num_sub_co)
+        res_co = new(Res_Co,[workers], num =num_res_co)
+
+        sub_dict, res_dict = create_dicts(sub_co, res_co, sub_attrs, res_attrs) 
+        self.sub_dict = sub_dict
+        self.res_dict = res_dict
+
+        sub_id = random.randint(0,len(sub_attrs))
+        res_id = random.randint(0,len(res_attrs))
+        start(sub_co)
+        start(res_co)
+        start(worker)
+
+    def get_sub_dict():
+        return self.sub_dict
+
+    def get_res_dict():
+        return self.res_dict
+
+    
+    def create_dicts(sub_co:list, res_co:list, sub_attrs:list, res_attrs:list): 
+        list_sub_coords = [p for p in sub_co]
+        list_res_coords = [p for p in res_co]
+        sub_dict = {}
+        res_dict = {}
+        for i in range(len(sub_attrs)):
+            sub_dict[sub_attrs[i]] = list_sub_coords[i]
+
+        for i in range(len(res_attrs)):
+            res_dict[res_attrs[i]] = list_res_coords[i]
+        return sub_dict, res_dict
+
+    def run():
+        initialize()
+
+def main():
+    num_sub_co = int(sys.argv[1]) if len(sys.argv) > 1 else 5
+    num_res_co = int(sys.argv[1]) if len(sys.argv) > 2 else 5
+    num_workers = int(sys.argv[1]) if len(sys.argv) > 3 else 5
+    sub_id = sys.argv[4]
+    res_id = sys.argv[5]
+    config(channel= 'fifo', clock='Lamport')
+    num_sub_attrs = 5
+    num_res_attrs = 5
+    master = new(Master, [num_sub_co, num_res_co, num_workers, num_sub_attrs, num_res_attrs])
+     
+    app = new(Application, [sub_id, res_id, master], num =1)
+    start(master)
+    start(app)
