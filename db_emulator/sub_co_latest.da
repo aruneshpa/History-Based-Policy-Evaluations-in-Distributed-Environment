@@ -9,17 +9,17 @@ class Sub_Co(process):
     def run():
         await(some(received(('Sub',))))
 
-    def receive(msg=('Sub',sub_id, 'Res', res_id, 'Master', master ), from_=p):
+    def receive(msg=('Sub',sub_id, 'Res', res_id, 's', master ), from_=p):
         self.app_id = p
         output("Request from Application received with " + sub_id + " and " + res_id)
         res_hash = master.res_dict
         res_coord_id = res_hash[res_id]
-        output("Subject coord sending to Res Co with " + str(res_coord_id))
+        output("Subject coord sending to Resource Coord " + str(res_coord_id))
         send(('Sub', sub_id, 'Res', res_id, 'Master', master), to=res_coord_id)
 
 
     def receive(msg=('Decision from Worker'), from_=p):
-        output("Aa gaya bc!!")
+        output("!!")
         app_id = self.app_id
         send(('Policy Decision'), to=app_id)
 
@@ -33,6 +33,7 @@ class Worker(process):
 
     def receive(msg=('Sub',sub_id, 'Res', res_id, 'Master', master), from_=p):
         output("Request from Resource_Coord received with " + sub_id + " and " + res_id)
+        # have to evaluate policy here
         sub_hash = master.sub_dict
         send(('Decision from Worker'), to=sub_hash[sub_id])
 
@@ -51,10 +52,15 @@ class Res_Co(process):
 
 
 class Application(process):
-    def setup(sub_id:int, res_id:int, master:Master): pass
+    def setup(sub_id:int, res_id:int, master:Master): 
+        self.sub_hash = dict()
 
     def run():
-        sub_hash = master.sub_dict
+        output("Applocation BP 1")
+        # I guess we have to send message to Master to get this hash
+        send(('Send me Subject Hash'), to=master)
+        #sub_hash = master.sub_dict
+        output("Application BP 2")
         sub_coord_id = sub_hash[sub_id]
         output("Sending this request to " + str(sub_coord_id))
         send(('Sub',sub_id, 'Res', res_id, 'Master', master), to=sub_coord_id)
@@ -74,25 +80,29 @@ class Master(process):
         res_attrs = ['Res1', 'Res2', 'Res3', 'Res4', 'Res5']
         worker = new(Worker, num =num_workers)
         workers = [w for w in worker]
-    
         sub_co = new(Sub_Co, num =num_sub_co)
         res_co = new(Res_Co,[workers], num =num_res_co)
 
-        sub_dict, res_dict = create_dicts(sub_co, res_co, sub_attrs, res_attrs) 
-        self.sub_dict = sub_dict
-        self.res_dict = res_dict
+        self.sub_dict, self.res_dict = create_dicts(sub_co, res_co, sub_attrs, res_attrs) 
+        output("bp 2")
+        #self.sub_dict = sub_dict
+        #self.res_dict = res_dict
 
         sub_id = random.randint(0,len(sub_attrs))
         res_id = random.randint(0,len(res_attrs))
         start(sub_co)
         start(res_co)
         start(worker)
+        output("bp 3")
 
-    def get_sub_dict():
-        return self.sub_dict
+    def receive(msg=('Send me Subject Hash'), from_=p):
+        output("baluchi")
+        send(('Subject Hash',self.sub_dict), to=p)
 
-    def get_res_dict():
-        return self.res_dict
+    def receive(msg=('Send me Resource Hash'), from_=p):
+        send(('Resource Hash',self.res_dict), to=p)
+
+    
 
     
     def create_dicts(sub_co:list, res_co:list, sub_attrs:list, res_attrs:list): 
@@ -123,4 +133,6 @@ def main():
      
     app = new(Application, [sub_id, res_id, master], num =1)
     start(master)
+    output(" master started")
     start(app)
+    output("application started")
