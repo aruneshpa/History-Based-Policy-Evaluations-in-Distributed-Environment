@@ -1,79 +1,130 @@
 import sys
+import time
 import random
 
 
 class Sub_Co(process):
-    def setup(Res:str):
-        self.Res = Res
+    def setup():
+        self.conflict = False
         self.app_id = None
         self.sub_dict = {}
         self.res_dict = {}
+        self.master = None
+        self.res_id = None
+        self.sub_id = None
+    
+    def check_for_sub_conflict():
+        return random.randint(0,1)
+
     def run():
-        #await(some(received(('Sub', _, 'Res', _, 'Master', _))))
-        output("Response Variable is == " + Res)
-        await(some(received(('Sub',))))
+        await(len(listof(p, received(('Sub', _, 'Res', _, 'Master', _), from_=p))) == 1)
+        
+        send(('Get', "res_attrs"), to=self.master)
+        await(len(listof(p, received(('res_attrs', _), from_=p))) == 1)
+    
+        send(('Get', "res_dict"), to=master)
+        await(some(received(('res_dict', res_dict), from_=p), has=(res_dict != None))) 
+
+        res_coord_id = res_dict[res_id]
+        output("Subject coord sending to Res Co with " + str(res_id))
+        
+        send(('Sub', sub_id, 'Res', res_id, 'Master', master), to=res_coord_id)
+        await(len(listof(p, received(('Decision from Worker'), from_=p))) == 1)
+        
+        if check_for_sub_conflict():
+            output("Subject COnflict!!. Abort!!.") 
+        else:
+            send(('Check Conflict', 'Res', res_id), to=res_coord_id)
+            await(len(listof(p, received(('Conflict eval', _), from_=p))) == 1)
+            if conflict:
+                output("Resource Conflict Present. Abort")
+            else:
+                output("Resource Conflict Absent. OK")
+                send(('Policy Decision'), to=app_id)
 
     def receive(msg=('Sub',sub_id, 'Res', res_id, 'Master', master ), from_=p):
         self.app_id = p
-        output("Request from Application received with " + sub_id + " and " + res_id)
-        send(("Get", "res_dict"), to=master)
-        output("Response Variable is == " + Res)
-        await(Res == "Yes")
-        self.Res = None
-        res_coord_id = res_dict[res_id]
-        output("Subject coord sending to Res Co with " + str(res_id))
-        output(str(master))
-        send(('Sub', sub_id, 'Res', res_id, 'Master', master), to=res_coord_id)
+        self.res_id = res_id
+        self.sub_id = sub_id
+        self.master = master
 
 
+    def receive(msg=("Conflict eval", conflict_decision), from_=p):
+        if conflict_decision == "Yes":
+            output("Conflict Present!!. Cleanup and abort!!")
+            conflict = True
+        else:
+            output("Conflict Absent!!. Good to Go!!")
+            conflict = False
+            
     def receive(msg=("sub_dict",sub_dict), from_=p):
         self.sub_dict = sub_dict
-        self.Res = "Yes"
     def receive(msg=("res_dict",res_dict), from_=p):
         self.res_dict = res_dict
-        self.Res = "Yes"
     def receive(msg=('Decision from Worker'), from_=p):
-        output("Aa gaya bc!!")
         app_id = self.app_id
-        send(('Policy Decision'), to=app_id)
 
 
 class Worker(process):
     def setup(response:str):
         self.sub_dict = {}
-        self.Response = response 
-
+        self.master = None
+        self.Response = response
+        self.sub_id = None
     def run():
         a = False
-        await(received(('Sub',)))
+        await(len(listof(p, received(('Sub', _, 'Res', _, 'Master', _), from_=p))) == 1) 
+        send(("Get", "sub_dict"), to=master)
+        
+        await(len(listof(p, received(('sub_dict', _), from_=p))) == 1)
+        send(('Decision from Worker'), to=sub_dict[sub_id])
 
     def receive(msg=("sub_dict",sub_dict), from_=p):
         self.sub_dict = sub_dict
-        self.Response = "Yes"
     def receive(msg=('Sub',sub_id, 'Res', res_id, 'Master', master), from_=p):
         output("Request from Resource_Coord received with " + sub_id + " and " + res_id)
-        send(("Get", "sub_dict"), to=master)
-        await(Response == "Yes")
-        send(('Decision from Worker'), to=sub_dict[sub_id])
-
+        self.master = master
+        self.sub_id = sub_id
 class Res_Co(process):
-    def setup(workers:list): pass
+    def setup(workers:list): 
+        self.sub_id = None
+        self.res_id = None
+        self.master = None
+        self.sub_co = None
+        self.conflict = "Yes" 
 
     def run():
-        #await(received(('Sub', _, 'Res', _, 'Master', _)))
-        await(received(('Sub',)))
-
-    def receive(msg=('Sub', sub_id, 'Res',res_id, 'Master', master), from_=p):
-        output("Request from Subject_Coord received with " + res_id)
-        w_num = random.randint(0,len(workers))
+        await(len(listof(p, received(('Sub', _, 'Res', _, 'Master', _), from_=p))) == 1)
+        w_num = random.randint(0,len(workers) -1)
         w_id = workers[w_num]
         output("Sending request to Worker " + str(w_id))
         send(('Sub',sub_id,'Res', res_id, 'Master', master), to=w_id)
 
+        await(len(listof(p, received(('Check Conflict', 'Res', res_id), from_=p))) == 1)
+        send(('Conflict eval', self.conflict), to=sub_co)
+
+    def check_res_conflict():
+        return random.randint(0,1)
+        #self.conflict =  
+        #return self.conflict
+
+    def receive(msg=('Check Conflict', 'Res',res_id), from_=p):
+        output("Checking COnflict ar Res Co!!")
+        ret = check_res_conflict()
+        if ret:
+            self.conflict = "Yes"
+        else:
+            self.conflict = "No"
+
+    def receive(msg=('Sub', sub_id, 'Res',res_id, 'Master', master), from_=p):
+        output("Request from Subject_Coord received with " + res_id)
+        self.sub_id = sub_id
+        self.res_id = res_id
+        self.master = master
+        self.sub_co = p
 
 class Application(process):
     def setup(sub_id:int, res_id:int, master:Master):
-        self.Response = None
         self.sub_dict = {}
         self.res_dict = {}
         self.sub_attrs = [] 
@@ -81,49 +132,38 @@ class Application(process):
 
     def run():
         send(('Get', "sub_dict"), to=master)
-        await(Response == "Yes") 
-        self.Response = None 
-        
+        await(len(listof(p, received(('sub_dict', _), from_=p))) == 1)
+         
         send(('Get', "sub_attrs"), to=master)
-        await(Response == "Yes") 
-        self.Response = None 
+        await(len(listof(p, received(('sub_attrs', _), from_=p))) == 1)
         
         send(('Get', "res_attrs"), to=master)
-        await(Response == "Yes") 
-        self.Response = None 
-        
+        await(len(listof(p, received(('res_attrs', _), from_=p))) == 1)
         
         sub_name = sub_attrs[0] 
         res_name = res_attrs[0] 
         sub_coord_id = sub_dict[sub_name]
         output("Sending this request to " + str(sub_coord_id))
+        
         send(('Sub',sub_name, 'Res', res_name, 'Master', master), to=sub_coord_id)
-        await(received(('Policy Decision',)))
+        await(len(listof(p, received(('Policy Decision',), from_=p))) == 1)
 
     
     def receive(msg=("sub_dict",sub_dict), from_=p):
-        output("Kuch to aaya!!")
         self.sub_dict = sub_dict
-        self.Response = "Yes"
     def receive(msg=("res_dict",res_dict), from_=p):
-        output("Kuch to aaya!!")
         self.res_dict = res_dict
-        self.Response = "Yes"
     def receive(msg=("sub_attrs",sub_attrs), from_=p):
-        output("Kuch to aaya!!")
         self.sub_attrs = sub_attrs
-        self.Response = "Yes"
     def receive(msg=("res_attrs",res_attrs), from_=p):
-        output("Atleast it came here") 
         self.res_attrs = res_attrs
-        self.Response = "Yes"
 
     def receive(msg=('Policy Decision'), from_=p):
         output("Policy Evaluated. Done!!")
         exit(0)
 
 class Master(process):
-    def setup(num_sub_co, num_res_co, num_workers, num_sub_attrs, num_res_attrs): 
+    def setup(num_sub_co:int, num_res_co:int, num_workers:int, num_sub_attrs:int, num_res_attrs:int, sub_co:set, res_co:set): 
         self.sub_dict = {}
         self.res_dict = {}
         self.sub_attrs = []
@@ -137,38 +177,22 @@ class Master(process):
     def initialize():
         self.sub_attrs = ['Sub1', 'Sub2', 'Sub3']
         self.res_attrs = ['Res1', 'Res2', 'Res3']
-        worker = new(Worker, ["No"], num =self.num_workers)
-        workers = [w for w in worker]
-    
-        sub_co = new(Sub_Co, ["No"], num =self.num_sub_co)
-        res_co = new(Res_Co,[workers], num =self.num_res_co)
-
         sub_dict, res_dict = self.create_dicts(sub_co, res_co, sub_attrs, res_attrs) 
         self.sub_dict = sub_dict
         self.res_dict = res_dict
-        start(sub_co)
-        start(res_co)
-        start(worker)
-
-
-    def get_sub_dict():
-        return self.sub_dict
-
-    def get_res_dict():
-        return self.res_dict
 
     def run():
         initialize()
-        await(received(('Get',)))
+        while(True):
+            await(len(listof(p, received(('Get', _), from_=p))) == 1)
+
 
     def receive(msg=('Get',query), from_=p):
-        output("Query Received at master!! " + query)
         if query == "sub_dict":
             send(("sub_dict", self.sub_dict), to=p)
         elif query == "res_dict":
             send(("res_dict", self.res_dict), to=p)
         elif query == "sub_attrs":
-            output(" sub_attr !! " + str(sub_attrs))
             send(("sub_attrs", self.sub_attrs), to=p)
         elif query == "res_attrs":
             send(("res_attrs", self.res_attrs), to=p)
@@ -180,23 +204,37 @@ class Master(process):
         sub_dict = {}
         res_dict = {}
         for i in range(len(sub_attrs)):
-            sub_dict[sub_attrs[i]] = list_sub_coords[i]
+            sub_dict[sub_attrs[i]] = list_sub_coords[random.randint(0, num_sub_co -1)]
 
         for i in range(len(res_attrs)):
-            res_dict[res_attrs[i]] = list_res_coords[i]
+            res_dict[res_attrs[i]] = list_res_coords[random.randint(0, num_res_co -1)]
         return sub_dict, res_dict
 
 
 def main():
-    num_sub_co = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    num_sub_co = int(sys.argv[1]) if len(sys.argv) > 1 else 3 
     num_res_co = int(sys.argv[1]) if len(sys.argv) > 2 else 3
     num_workers = int(sys.argv[1]) if len(sys.argv) > 3 else 3
     config(channel= 'fifo', clock='Lamport')
     num_sub_attrs = 5
     num_res_attrs = 5
-    master = new(Master, [num_sub_co, num_res_co, num_workers, num_sub_attrs, num_res_attrs], num =1)
     sub_id = 2 
     res_id = 1 
+    
+
+    worker = new(Worker, ["No"], num =num_workers)
+    workers = [w for w in worker]
+    sub_co = new(Sub_Co, num =num_sub_co)
+    res_co = new(Res_Co,[workers], num =num_res_co)
+    master = new(Master, [num_sub_co, num_res_co, num_workers, num_sub_attrs, num_res_attrs, sub_co, res_co], num =1)
     app = new(Application, [sub_id, res_id, master], num =1)
+    
     start(master)
+    
     start(app)
+    
+    start(sub_co)
+    
+    start(res_co)
+    
+    start(worker)
