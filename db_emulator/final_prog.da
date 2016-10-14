@@ -6,57 +6,59 @@ import random
 class Sub_Co(process):
     def setup():
         self.conflict = False
-        self.tent_updated_attrs = []
-        self.recent_updates = []
+        self.tent_updated_attrs = {}
+        self.recent_updates = dict() 
         self.app_id = None
-        self.uniq_id = 0
-        self.obligations_sub = []
-        self.obligations_res = []
-        self.GB_UNIQ = []
+        self.uniq_id = 0 
+        self.obligations_sub = {} 
+        self.obligations_res = {}
+        self.GB_UNIQ = dict()
         self.res_dict = {}
         self.master = None
         self.res_id = None
         self.sub_id = None
-        self.sub_attrs_list = []
-        self.has_updated_tent = []
+        self.sub_attrs_list = {}
+        self.has_updated_tent_attrs = []
         self.has_read_from_tent = []
     
-    def check_for_sub_conflict():
+    def check_for_sub_conflict(obligations_sub, recent_updates):
+        output(str(recent_updates))
         for attrs in obligations_sub:
             if attrs in recent_updates:
-                if obligations[attrs][1] != recent_updates[attrs][1]:
+                if obligations_sub[attrs] != recent_updates[attrs]:
                     return True
         return False
     
     def run():
+        output(" Uniq Id == " + str(self.uniq_id))
         await(len(listof(p, received(('Sub', _, 'Res', _, 'Master', _), from_=p))) == 1)
-        GB_UNIQ[uniq_id] = [sub_id, res_id]
-        uniq_id += 1
-
-        if tent_updated_attrs not None: 
+        #GB_UNIQ[uniq_id] = [sub_id, res_id]
+        self.GB_UNIQ[self.uniq_id] = [sub_id, res_id]
+        uniq_id = uniq_id + 1
+        if self.tent_updated_attrs: 
             #intersection Present
-            has_read_from_tent.append(uniq.id)
+            has_read_from_tent.append(uniq_id)
         
 
         send(('Get', "res_dict"), to=master)
-        await(some(received(('res_dict', res_dict), from_=p), has=(res_dict != None))) 
+        await(len(listof(p, received(('res_dict', _), from_=p))) == 1)
 
         res_coord_id = res_dict[res_id]
         output("Subject coord sending to Res Co with " + str(res_id))
         
-        send(('Sub', sub_id, 'Res', res_id, 'Master', master), to=res_coord_id)
+        send(('Sub', sub_id, 'Res', res_id, 'uniq_id', self.uniq_id, 'Master', master), to=res_coord_id)
         await(len(listof(p, received(('Decision from Worker', _, "oblig_sub", _, "oblig_res", _), from_=p))) == 1)
-        if check_for_sub_conflict():
+        if check_for_sub_conflict(self.obligations_sub, self.recent_updates):
             output("Subject COnflict!!. Abort!!.") 
         else:
             for obj in obligations_sub:
-                tent_updates_attrs.append(obj)
+                tent_updated_attrs.update(obligations_sub)
                 has_updated_tent_attrs.append(uniq_id)
             send(('Check Conflict', 'Res', res_id, "oblig_res", obligations_res), to=res_coord_id)
-            await(len(listof(p, received(('Conflict eval', _), from_=p))) == 1)
+            await(len(listof(p, received(('Conflict eval', _), from_=p))) == 2)
             if conflict:
                 output("Resource Conflict Present. Abort")
-                output("Restart eval " + uniq_id)
+                output("Restart eval " + str(uniq_id))
             else:
                 output("Resource Conflict Absent. OK")
                 for i in has_updated_tent_attrs:
@@ -65,21 +67,17 @@ class Sub_Co(process):
                 has_updated_tent_attrs.remove(self.uniq_id)
                 for p in obligations_sub:
                     if p in tent_updated_attrs:
-                        tent_updated_attrs.remove(p)
+                        del tent_updated_attrs[p]
 
-                for p in obligations_sub:
-                    if p in recent_updates:
-                        recent_updates[p][1] = obligations_sub[p][1]
-                    else:
-                        recent_updates.append(obligations_sub[p])
+                recent_updates.update(obligations_sub)
                 send(('Policy Decision'), to=app_id)
+                output(str(recent_updates))
 
     def receive(msg=('Sub',sub_id, 'Res', res_id, 'Master', master ), from_=p):
         self.app_id = p
         self.res_id = res_id
         self.sub_id = sub_id
         self.master = master
-
 
     def receive(msg=("Conflict eval", conflict_decision), from_=p):
         if conflict_decision == "Yes":
@@ -91,8 +89,8 @@ class Sub_Co(process):
             
     def receive(msg=("sub_attrs",sub_attrs), from_=p):
         self.sub_attrs_list = sub_attrs_list
-    def receive(msg=("sub_dict",sub_dict), from_=p):
-        self.sub_dict = sub_dict
+    #def receive(msg=("sub_dict",sub_dict), from_=p):
+    #    self.sub_dict = sub_dict
     def receive(msg=("res_dict",res_dict), from_=p):
         self.res_dict = res_dict
 
@@ -105,33 +103,39 @@ class Sub_Co(process):
 class Worker(process):
     def setup(response:str):
         self.sub_dict = {}
-        self.sub_attr_list = []
-        self.res_attr_list = []
-        self.sub_obligations = []
-        self.res_obligations = []
+        self.sub_attr_list = {}
+        self.res_attr_list = {}
+        self.sub_obligations = {}
+        self.res_obligations = {}
         self.master = None
         self.Response = response
         self.sub_id = None
+    def policy(sub_attr_list, res_attr_list):
+        for i in res_attr_list.keys():
+            res_attr_list[i] += 1
+        sub_attr_list['Sub2'] = '5'
+        
+        return sub_attr_list, res_attr_list
     def run():
-        a = False
         await(len(listof(p, received(('Sub', _, 'Res', _, 'Master', _), from_=p))) == 1) 
 
         send(("Get", "sub_dict"), to=master)
         await(len(listof(p, received(('sub_dict', _), from_=p))) == 1)
         
-        send(("Get", "sub_attr_list"), to=master)
-        await(len(listof(p, received(('sub_attr_list', _), from_=p))) == 1)
-        send(("Get", "res_attr_list"), to=master)
-        await(len(listof(p, received(('res_attr_list', _), from_=p))) == 1)
+        send(("Get", "sub_attrs"), to=master)
+        await(len(listof(p, received(('sub_attrs', _), from_=p))) == 1)
+        send(("Get", "res_attrs"), to=master)
+        await(len(listof(p, received(('res_attrs', _), from_=p))) == 1)
+        output("Sending Decision to Sub_Co\n") 
         (obligations_sub, obligations_res) = policy(sub_attr_list, res_attr_list)
 
-        
+        output("Sending Decision to Sub_Co\n") 
         send(('Decision from Worker', "Decision", "oblig_sub", obligations_sub, "oblig_res", obligations_res), to=sub_dict[sub_id])
 
-    def receive(msg=("res_attr_list", res_attr_list), from_=p):
-        self.res_attr_list = res_attr_list
-    def receive(msg=("sub_attr_list", sub_attr_list), from_=p):
-        self.sub_attr_list = sub_attr_list
+    def receive(msg=("res_attrs", res_attrs), from_=p):
+        self.res_attr_list = res_attrs
+    def receive(msg=("sub_attrs", sub_attrs), from_=p):
+        self.sub_attr_list = sub_attrs
     def receive(msg=("sub_dict",sub_dict), from_=p):
         self.sub_dict = sub_dict
     def receive(msg=('Sub',sub_id, 'Res', res_id, 'Master', master), from_=p):
@@ -140,7 +144,7 @@ class Worker(process):
         self.sub_id = sub_id
 class Res_Co(process):
     def setup(workers:list): 
-        self.recent_updates = []
+        self.recent_updates = {}
         self.ongoing_evals = []
         self.uniq_id = None
         self.sub_id = None
@@ -163,13 +167,13 @@ class Res_Co(process):
 
         await(len(listof(p, received(('Check Conflict', 'Res', res_id, "oblig_res", _), from_=p))) == 1)
         send(('Conflict eval', self.conflict), to=sub_co)
-
+        output(str(recent_updates))
     def check_res_conflict(obligations_res):
-        for attr in obligations_res:
-            if attr in recent_updates:
-                if obligations_res[attr][1] != recent_updates[attr][1]:
-                    return False
-        return True
+        for k in obligations_res:
+            if k in recent_updates:
+                if obligations_res[k] != recent_updates[k]:
+                    return True
+        return False 
     def receive(msg=('Check Conflict', 'Res',res_id, "oblig_res", obligations_res), from_=p):
         output("Checking COnflict ar Res Co!!")
         ret = check_res_conflict(obligations_res)
@@ -177,11 +181,13 @@ class Res_Co(process):
             self.conflict = "Yes"
         else:
             self.conflict = "No"
-            for attr in obligations_res:
-                if attr not in recent_updates.keys():
-                    recent_updates.append(obligations_res[attr])
-                else:
-                    recent_updates[attr][1] = obligations_res[attr][1]
+            recent_updates.update(obligations_res)
+            #for attr in obligations_res:
+            #    for attr1  in recent_updates:
+            #        output("ATTR ==" + str(attr) + "ATTR1 " + str(attr1))
+            #        recent_updates.append(attr)
+            #    else:
+            #        recent_updates[attr][1] = obligations_res[attr][1]
                     
 
     def receive(msg=('Sub', sub_id, 'Res',res_id, 'uniq_id', uniq_id, 'Master', master), from_=p):
@@ -227,8 +233,8 @@ class Master(process):
     def setup(num_sub_co:int, num_res_co:int, num_workers:int, num_sub_attrs:int, num_res_attrs:int, sub_co:set, res_co:set): 
         self.sub_dict = {}
         self.res_dict = {}
-        self.sub_attrs = []
-        self.res_attrs = []
+        self.sub_attrs = {}
+        self.res_attrs = {}
         self.sub_id = "Sub1"
         self.num_res_co = num_res_co
         self.num_sub_co = num_sub_co
@@ -237,8 +243,8 @@ class Master(process):
         self.num_res_attrs = num_res_attrs
 
     def initialize():
-        self.sub_attrs = [{'Attr1':'1', 'Attr2':'2', 'Attr3':'3'}]
-        self.res_attrs = [{'Res1':'1', 'Res2':'2', 'Res3':'3'}]
+        self.sub_attrs = {'Attr1':'1', 'Attr2':'2', 'Attr3':'3'}
+        self.res_attrs = {'Res1':1, 'Res2':2, 'Res3':3}
         sub_dict, res_dict = self.create_dicts(sub_co, res_co, sub_attrs, res_attrs) 
         self.sub_dict = sub_dict
         self.res_dict = res_dict
@@ -289,11 +295,14 @@ def main():
 
     worker = new(Worker, ["No"], num =num_workers)
     workers = [w for w in worker]
-    sub_co = new(Sub_Co, num =num_sub_co)
+    sub_co = new(Sub_Co,[],  num =num_sub_co)
     res_co = new(Res_Co,[workers], num =num_res_co)
     master = new(Master, [num_sub_co, num_res_co, num_workers, num_sub_attrs, num_res_attrs, sub_co, res_co], num =1)
-    app = new(Application, [sub_id, res_id, master], num =1)
+    app = new(Application, [sub_id, res_id, master], num =2)
     
+    #setup(sub_co, ())
+    #setup(sub_co, ())
+
     start(master)
     
     start(app)
