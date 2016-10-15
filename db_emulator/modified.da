@@ -1,0 +1,301 @@
+import sys
+import time
+import random
+
+class Sub_Co(process):
+    def setup(num_req:int):
+        self.conflict = False
+        self.tent_updated_attrs = {}
+        self.recent_updates = dict()
+        self.res_coord_id = None
+        self.app_id = None
+        self.uniq_id = 0
+        self.obligations_sub = {}
+        self.obligations_res = {}
+        self.GB_UNIQ = dict()
+        self.res_dict = {}
+        self.master = None
+        self.res_id = None
+        self.sub_id = None
+        self.sub_attrs_list = {}
+        self.has_updated_tent_attrs = []
+        self.has_read_from_tent = []
+
+    def check_for_sub_conflict(obligations_sub, recent_updates):
+        for attrs in obligations_sub:
+            if attrs in recent_updates:
+                if obligations_sub[attrs] != recent_updates[attrs]:
+                    return True
+        return False
+
+    def run():
+        await(False)
+
+    def receive(msg=('Sub',sub_id, 'Res', res_id, 'Master', master ), from_=p):
+        self.GB_UNIQ[self.uniq_id] = [sub_id, res_id]
+        self.app_id = p
+        self.res_id = res_id
+        self.sub_id = sub_id
+        self.master = master
+        uniq_id = uniq_id + 1
+        if self.tent_updated_attrs:
+            #intersection Present
+            has_read_from_tent.append(uniq_id)
+        send(('Get', "res_dict"), to=master)
+
+    def receive(msg=("Conflict eval", conflict_decision), from_=p):
+        if conflict_decision == "Yes":
+            output("Conflict Present!!. Cleanup and abort!!")
+            conflict = True
+        else:
+            output("Conflict Absent!!. Good to Go!!")
+            conflict = False
+        if conflict:
+            output("Resource Conflict Present. Abort")
+            output("Restart eval " + str(uniq_id))
+        else:
+            output("Resource Conflict Absent. OK")
+            for i in has_updated_tent_attrs:
+                if i<self.uniq_id:
+                    time.sleep(2)
+            has_updated_tent_attrs.remove(self.uniq_id)
+            for p in obligations_sub:
+                if p in tent_updated_attrs:
+                    del tent_updated_attrs[p]
+
+            recent_updates.update(obligations_sub)
+            send(('Policy Decision'), to=app_id)
+
+
+    def receive(msg=("sub_attrs",sub_attrs), from_=p):
+        self.sub_attrs_list = sub_attrs_list
+
+
+    def receive(msg=("res_dict",res_dict), from_=p):
+        self.res_dict = res_dict
+        self.res_coord_id = res_dict[res_id]
+        send(('Sub', sub_id, 'Res', res_id, 'uniq_id', self.uniq_id, 'Master', master), to=res_coord_id)
+
+
+    def receive(msg=('Decision from Worker', "Decision", "oblig_sub", obligations_sub, "oblig_res", obligations_res), from_=p):
+        app_id = self.app_id
+        self.obligations_sub = obligations_sub
+        self.obligations_res = obligations_res
+
+        if check_for_sub_conflict(self.obligations_sub, self.recent_updates):
+            output("Subject COnflict!!. Abort!!.")
+        else:
+            for obj in obligations_sub:
+                tent_updated_attrs.update(obligations_sub)
+                has_updated_tent_attrs.append(uniq_id)
+            send(('Check Conflict', 'Res', res_id, "oblig_res", obligations_res), to=res_coord_id)
+
+
+class Worker(process):
+    def setup(response:str):
+        self.sub_dict = {}
+        self.sub_attr_list = {}
+        self.res_attr_list = {}
+        self.sub_obligations = {}
+        self.res_obligations = {}
+        self.master = None
+        self.Response = response
+        self.sub_id = None
+    def policy(sub_attr_list, res_attr_list):
+        for i in res_attr_list.keys():
+            res_attr_list[i] += 1
+        sub_attr_list['Sub2'] = '5'
+
+        return sub_attr_list, res_attr_list
+    def run():
+        await(False)
+
+    def receive(msg=("res_attrs", res_attrs), from_=p):
+        self.res_attr_list = res_attrs
+        (obligations_sub, obligations_res) = policy(sub_attr_list, res_attr_list)
+        output("Sending Decision to Sub_Co")
+        send(('Decision from Worker', "Decision", "oblig_sub", obligations_sub, "oblig_res", obligations_res), to=sub_dict[sub_id])
+
+    def receive(msg=("sub_attrs", sub_attrs), from_=p):
+        self.sub_attr_list = sub_attrs
+        send(("Get", "res_attrs"), to=master)
+
+    def receive(msg=("sub_dict",sub_dict), from_=p):
+        self.sub_dict = sub_dict
+        send(("Get", "sub_attrs"), to=master)
+
+    def receive(msg=('Sub',sub_id, 'Res', res_id, 'Master', master), from_=p):
+        output("Request from Resource_Coord received with " + sub_id + " and " + res_id)
+        self.master = master
+        self.sub_id = sub_id
+        send(("Get", "sub_dict"), to=master)
+
+
+
+class Res_Co(process):
+    def setup(workers:list):
+        self.recent_updates = {}
+        self.ongoing_evals = []
+        self.uniq_id = None
+        self.sub_id = None
+        self.res_id = None
+        self.master = None
+        self.sub_co = None
+        self.conflict = "Yes"
+
+    def run():
+        await(False)
+
+    def check_res_conflict(obligations_res):
+        for k in obligations_res:
+            if k in recent_updates:
+                if obligations_res[k] != recent_updates[k]:
+                    return True
+        return False
+
+    def receive(msg=('Check Conflict', 'Res',res_id, "oblig_res", obligations_res), from_=p):
+        output("Checking COnflict ar Res Co!!")
+        ret = check_res_conflict(obligations_res)
+        if ret:
+            self.conflict = "Yes"
+        else:
+            self.conflict = "No"
+            recent_updates.update(obligations_res)
+        send(('Conflict eval', self.conflict), to=sub_co)
+        output(str(recent_updates))
+
+
+    def receive(msg=('Sub', sub_id, 'Res',res_id, 'uniq_id', uniq_id, 'Master', master), from_=p):
+        output("Request from Subject_Coord " + str(p) + " Unique Id =" + str(uniq_id))
+        self.sub_id = sub_id
+        self.uniq_id = uniq_id
+        self.res_id = res_id
+        self.master = master
+        self.sub_co = p
+        output("Hii By Res " + str(self.id))
+        if self.uniq_id in self.ongoing_evals:
+            output("Already Evaluated req. Subject Conflict!!")
+        else:
+            self.ongoing_evals.append(self.uniq_id)
+
+        w_num = random.randint(0,len(workers) -1)
+        w_id = workers[w_num]
+        output("Sending request to Worker " + str(w_id))
+        send(('Sub',sub_id,'Res', res_id, 'Master', master), to=w_id)
+
+
+class Application(process):
+    def setup(sub_id:str, res_id:str, master:Master):
+        self.sub_dict = {}
+        self.res_dict = {}
+        self.sub_attrs = []
+
+    def run():
+        #for i in range(2):
+
+            send(('Get', "sub_dict"), to=master)
+            await(some(received(('sub_dict', _), from_=p)))
+
+            sub_name = "Sub1"
+            res_name = "Res1"
+
+            sub_coord_id = sub_dict[sub_name]
+            output("Sending this request to " + str(sub_coord_id))
+
+            send(('Sub',sub_name, 'Res', res_name, 'Master', master), to=sub_coord_id)
+            await(some(received(('Policy Decision',), from_=p)))
+
+
+    def receive(msg=("sub_dict",sub_dict), from_=p):
+        self.sub_dict = sub_dict
+    def receive(msg=("res_dict",res_dict), from_=p):
+        self.res_dict = res_dict
+    def receive(msg=("sub_attrs",sub_attrs), from_=p):
+        self.sub_attrs = sub_attrs
+
+    def receive(msg=('Policy Decision'), from_=p):
+        output("Policy Evaluated. Done!!")
+
+
+class Master(process):
+    def setup(num_sub_co:int, num_res_co:int, num_workers:int, num_sub_attrs:int, num_res_attrs:int, sub_co:set, res_co:set):
+        self.sub_dict = {}
+        self.res_dict = {}
+        self.sub_attrs = {}
+        self.res_attrs = {}
+        self.sub_id = "Sub1"
+        self.num_res_co = num_res_co
+        self.num_sub_co = num_sub_co
+        self.num_workers = num_workers
+        self.num_sub_attrs = num_sub_attrs
+        self.num_res_attrs = num_res_attrs
+
+    def initialize():
+        self.sub_attrs = {'Attr1':'1', 'Attr2':'2', 'Attr3':'3'}
+        self.res_attrs = {'Res1':1, 'Res2':2, 'Res3':3}
+        sub_dict, res_dict = self.create_dicts(sub_co, res_co, sub_attrs, res_attrs)
+        self.sub_dict = sub_dict
+        self.res_dict = res_dict
+
+    def run():
+        initialize()
+        while True:
+            await(len(listof(p, received(('Get', _), from_=p))) == 2)
+
+    def receive(msg=('Get',query), from_=p):
+        if query == "sub_dict":
+            send(("sub_dict", self.sub_dict), to=p)
+        elif query == "res_dict":
+            send(("res_dict", self.res_dict), to=p)
+        elif query == "sub_attrs":
+            send(("sub_attrs", self.sub_attrs), to=p)
+        elif query == "res_attrs":
+            send(("res_attrs", self.res_attrs), to=p)
+
+
+    def create_dicts(sub_co, res_co, sub_attrs, res_attrs):
+        list_sub_coords = [p for p in sub_co]
+        list_res_coords = [p for p in res_co]
+        sub_dict = {}
+        res_dict = {}
+        sub_dict['Sub1'] = list_sub_coords[random.randint(0, num_sub_co-1)]
+        res_dict['Res1'] = list_res_coords[random.randint(0, num_res_co-1)]
+        # Use following code when you have more than one subjects (Mapping subject to a suject coord)
+        #for i in range(len(sub_attrs)):
+        #    sub_dict[sub_attrs[i]] = list_sub_coords[random.randint(0, num_sub_co-1)]
+
+        #for i in range(len(res_attrs)):
+        #    res_dict[res_attrs[i]] = list_res_coords[random.randint(0, num_res_co -1)]
+        return sub_dict, res_dict
+
+
+def main():
+    num_sub_co = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+    num_res_co = int(sys.argv[1]) if len(sys.argv) > 2 else 1
+    num_workers = int(sys.argv[1]) if len(sys.argv) > 3 else 1
+    config(channel= 'fifo', clock='Lamport')
+    num_sub_attrs = 5
+    num_res_attrs = 5
+    sub_id = "Sub1"
+    res_id = "Res1"
+
+
+    worker = new(Worker, ["No"], num =num_workers)
+    workers = [w for w in worker]
+    sub_co = new(Sub_Co,[2],  num =num_sub_co)
+    res_co = new(Res_Co,[workers], num =num_res_co)
+    master = new(Master, [num_sub_co, num_res_co, num_workers, num_sub_attrs, num_res_attrs, sub_co, res_co], num =1)
+    app = new(Application, [sub_id, res_id, master], num =3)
+
+    #setup(sub_co, ())
+    #setup(sub_co, ())
+
+    start(master)
+
+    start(app)
+
+    start(sub_co)
+
+    start(res_co)
+
+    start(worker)
