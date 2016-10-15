@@ -1,46 +1,65 @@
 import sys
 import time
 import random
+import logging
 
 class Request:
-    def __init__(sub_id, req_id):
+    def __init__(self, sub_id, res_id, h):
         self.sub_id = sub_id
-        self.req_id = req.id
+        self.res_id = res_id
         self.timestamp = time.time()
         self.sub_attrs = []
         self.res_attrs = []
+        self.app_id = None
+        self.sub_attrs_to_update = []
+        self.res_attrs_to_update = []
+        self.hashMap = h
 
 #Process Application
-def Application(process):
-    def setup(sub_coord_id:Sub_Co):
+class Application(process):
+    def setup(hashMap:dict):
         pass
     def run():
         #Read Sub_ID and Red_ID from config file. Create an object of Request
         sub_id = "employee"
         res_id = "bank A"
-        req = Request(sub_id, res_id)
+        req = Request(sub_id, res_id, hashMap)
+
+        req.app_id = self.id
 
         #Read the subject Coordinator from the config file
         # or something like
         # sub_coord_id = hash(sub_id)
         # take arg for now
-        send(("evalRequestFromApp", req), to=sub_coord_id)
+        logging.info("Application sending Req to Sub_Co " + str(req.hashMap[sub_id]))
+        send(("evalRequestFromApp", req), to=req.hashMap[sub_id])
+        await(False)
+    def receive(msg=('policyDecisionFromSub_Co', decision), from_= sub_coord_id):
+        logging.info("Received Policy decision from Sub_Co at App-> " + str(self.id))
+        if decision== "Success":
+            output("Policy Evaluated")
 
-def Sub_Co:
-    def setup(res_coord_id:Res_Co):
-        self.procs = {}
-        self.updated_cache = {}
+class Sub_Co(process):
+    def setup():
+        self.procs = dict()
+        self.app_id = None
+        self.updated_cache = dict()
+        self.has_read_from_tent = []
         self.tent_updated_attrs = {}    # dict of str and dict
                                         # 'Attr1':{'Val':value, 'Time':timestamp}
+
     def run():
+
         await(False)
+
     def receive(msg=('evalRequestFromApp', req), from_= app_id):
         # Mark yourself as running. So as it is easy to check whether you were restarted later.
-        procs[self.id] = "Running"
-
+        logging.info("Received Eval Req from App at Sub_Co-> " + str(self.id))
+        self.procs[req] = "Running"
+        self.app_id = app_id
         # Get the Attributes needed (Only reqd ones, not all of them) from the config file.
-        req.sub_attrs = {"position":"employee"}
-        req.res_attrs = {"id":"bank A"}
+        req.sub_attrs = {"history":"empty"}
+        req.res_attrs = {}
 
         # check if those attributes in recent and then tent
         # update the request accordingly
@@ -49,84 +68,149 @@ def Sub_Co:
                 req.sub_attrs[attr] = updated_cache[attr]
         for attr in req.sub_attrs:
             if attr in tent_updated_attrs:
-                req.sub_attrs[attr] = tent_updated_attrs[attr][val]
-                has_read_from_tent.append(req)
-        # FInd the resource Coordinator from config filr or hash
-        send(msg=('evalRequestFromSub_Co', req), to=res_coord_id)
+                req.sub_attrs[attr] = tent_updated_attrs[attr]['value']
+        # for attr in req.sub_attrs:
+        #     for a in tent_updated_attrs:
+        #         if attr in a:
+        #             req.sub_attrs[attr] = tent_updated_attrs[a][attr]
+        #             has_read_from_tent.append(req)
+        # Find the resource Coordinator from config file or hash
+        logging.info("Request Updated with Tent and Cache")
+        logging.info("Final Req Object is-> " + str(req))
+        logging.info("Sub_Co Sending Eval Request to Res_Co-> " + str(req.hashMap[req.res_id]))
+        send(('evalRequestFromSub_Co', req), to=req.hashMap[req.res_id])
 
-        #When the decision arrives
-    def receive(msg=('decisionFomWorker', req), from_= w_id):
-        #Check Subject Conflict here
+        # When the decision arrives
+    def receive(msg=('decisionFromWorker', req), from_= w_id):
+        logging.info("Decision from Worker Recvd at-> " + str(self.id))
+        logging.info("Sub obligations-> " + str(req.sub_attrs_to_update))
+        logging.info("Res obligations-> " + str(req.res_attrs_to_update))
+        # Check Subject Conflict here
+        conflict = None
         for attr in req.sub_attrs_to_update:
-            if attr in tent_updated_attrs:
+            for attr in tent_updated_attrs:
+                if tent_updated_attrs[attr]['timestamp'] > req.timestamp:
                 # If someone has updated tent after you read from it
-                if tent_updated_attrs[attr][timestamp] > req.timestamp:
                     # Conflict
-                    output("Conflict")
+                    conflict = "Present"
                     # Cleanup and Restart
                     procs[self.id] = "Restarted"
                     # Restart Code
-                    send(('evalRequestFromApp'), to = self.id)
-        # If you are here, No subject Conflict. Add to tent. (Step 9)
-        for attr in req.sub_attrs_to_update:
-            if attr in tent_updated_attrs:
-                tent_updated_attrs[attr][value] = req.sub_attrs_to_update[attr]
-                tent_updated_attrs[attr][timestamp] = req.timestamp
-            else:
-                # New Entry
-                val = req.sub_attrs_to_update[attr]
-                ts = req.timestamp
-                tent_updated_attrs[attrs].append({'value': vas, 'ts':ts })
+                    logging.info("Subject Conflict Found. Restart-> " + self.id)
+                    send(('evalRequestFromApp', req), to = req.app_id)
+                    break
 
+        if conflict != "Present":
+            logging.info("Subject Conflict-> Absent.")
+            for attr in req.sub_attrs_to_update:
+                # If you are here, No subject Conflict. Add to tent. (Step 9)
+                if attr in tent_updated_attrs:
+                    tent_updated_attrs[attr]['value'] = req.sub_attrs_to_update[attr]
+                    tent_updated_attrs[attr]['timestamp'] = req.timestamp
+                else:
+                    # New Entry
+                    val = req.sub_attrs_to_update[attr]
+                    ts = req.timestamp
+                    tent_updated_attrs[attr] = dict()
+                    tent_updated_attrs[attr]['value'] = val
+                    tent_updated_attrs[attr]['timestamp'] = ts
+        logging.info("Updated the tent_attr")
+        logging.info("Sending Req for Res Conflict eval to Res_Co-> " + str(req.hashMap[req.res_id]))
         # Check for Res Conflict
-        send(('conflictEvalRequestFromSub_Co', req), to=res_coord_id)
+        send(('conflictEvalRequestFromSub_Co', req), to=req.hashMap[req.res_id])
 
     def receive(msg=('conflictEvalReplyFromRes_Co', conflict_decision, req), from_= res_coord_id):
-        if conflict_decision == "Yes":
-            #Resource Conflict
+        logging.info("Received Conflict eval reply from Res_Co at-> " + str(self.id))
+        if conflict_decision == "Present":
+            # Resource Conflict
+            logging.info("Resource Conflict was found at Res_Co.")
+            for r in has_read_from_tent:
+                if r.timestamp > req.timestamp:
+                    # Cleanup
+                    # Check if any the tent_updated_attrs was updated by
+                    # Any of these. If yes, revert back.
+                    logging.info("Clearing Adminstration for request-> " + str(r))
+                    for attr in r.sub_attrs:
+                        if attr in tent_updated_attrs:
+                            if tent_updated_attrs[attr]['timestamp'] == r.timestamp:
+                                del tent_updated_attrs[attr]
+                    logging.info("Restarting request " + str(r))
+                    send(('evalRequestFromApp', r), to=self.id)
+            # Restart yourself
+            logging.info("Clearing Adminstration for request-> " + str(req))
+            for attr in req.sub_attrs:
+                if attr in tent_updated_attrs:
+                    if tent_updated_attrs[attr]['timestamp'] == req.timestamp:
+                        del tent_updated_attrs[attr]
+            logging.info("Restarting request-> " + str(req))
+            send(('evalRequestFromApp', req), to=self.id)
         else:
-            #No Conflict
+            # No Conflict
+            # Add to Cache and Commit
+            logging.info("No Conflict. Going to Commit.")
+            for attr in req.sub_attrs_to_update:
+                #Commit
+                updated_cache[attr] = req.sub_attrs_to_update[attr]
+            logging.info("Sending Policy Decision from Sub_Co to App-> " + str(self.app_id))
+            send(('policyDecisionFromSub_Co', "Success"), to=self.app_id)
 
-
-
-
-
-
-def Res_Co:
+class Res_Co(process):
     def setup(w_id:Worker):
         self.ongoingEvals = []
         self.updated_cache = {}
     def run():
         await(False)
     def receive(msg=('evalRequestFromSub_Co', req), from_= sub_coord_id):
+        logging.info("Request from Sub_Co recvd at-> " + str(self.id))
         #Append this request to Ongoing Evals
         ongoingEvals.append(req)
         #Update the ongong attributes with the list of committed ones.
         for attr in req.res_attrs:
-            if attr in recent_updates:
+            if attr in updated_cache:
                 req.res_attrs[attr] = updated_cache[attr]
-        send(msg('evalRequestFromRes_Co', req), to=w_id)
+        logging.info("Sending Request from Res_Co Worker-> " + str(w_id))
+        send(('evalRequestFromRes_Co', req), to=w_id)
 
-    def receive(msg=('conflictEvalRequestFromSub_Co'), from = sub_coord_id):
+    def receive(msg=('conflictEvalRequestFromSub_Co', req), from_ = sub_coord_id):
+        conflict_decision = None
+        logging.info("Received Req for Res Conflict eval at-> " + str(self.id))
         for attr in req.res_attrs_to_update:
             if attr in updated_cache:
-                if recent_updates[attr][timestamp] > req.timestamp:
+                if updated_cache[attr]['timestamp'] > req.timestamp:
+                    conflict_decision = "Present"
                     # Someone Wrote on top of the value that you read. Conflict:
-                    send(msg=('conflictEvalReplyFromRes_Co', conflict_decision), to=sub_coord_id)
-        # if you are here, No conflict. Go ahead and commit
-        for attr in req.res_attrs_to_update:
-            if attr in updated_cache:
-                updated_cache[attr][val] = req.res_attrs_to_update[attr]
-                updated_cache[attr][timestamp] = req.timestamp          # Put this proc's timestamp
-        send(msg=('conflictEvalReplyFromRes_Co', conflict_decision, req), to=sub_coord_id)
+                    break
+        if conflict_decision == "Present":
+            # Restart
+            logging.info("Resource Conflict-> Present")
+            logging.info("Send Conflict msg to Sub_Co-> " + str(sub_coord_id))
+            send(('conflictEvalReplyFromRes_Co', conflict_decision, req), to=sub_coord_id)
+        else:
+            # Commit to Cache
+            logging.info("No Conflict")
+            for attr in req.res_attrs_to_update:
+                logging.info("Updating the Cache")
+                updated_cache[attr] = req.res_attrs_to_update[attr]
+            logging.info("Send No Conflict msg to Sub_Co-> " + str(sub_coord_id))
+            send(('conflictEvalReplyFromRes_Co', conflict_decision, req), to=sub_coord_id)
 
 
-def Worker:
+class Worker(process):
     def setup():
+        pass
+
 
     def run():
         await(False)
+
+    def policy(req):
+        sub_attrs_to_update = req.sub_attrs
+        res_attrs_to_update = req.res_attrs
+        return (sub_attrs_to_update, res_attrs_to_update)
+
+
     def receive(msg=('evalRequestFromRes_Co', req), from_= res_coord_id):
+        logging.info("Received Request from Res_Co at-> " + str(self.id))
         # See if this request has the attributes.
         # If not, got to the DB and fetch. If yes, evaluate on the same attrs
         if req.sub_attrs is None:
@@ -135,13 +219,31 @@ def Worker:
         if req.res_attrs is None:
             #Get from the DB and set it to req.res_attrs
             pass
-        (sub_attrs_to_update, res_attrs_to_update) = policy(req.sub_attrs, req.res_attrs)
+        (sub_attrs_to_update, res_attrs_to_update) = policy(req)
         req.sub_attrs_to_update = sub_attrs_to_update
         req.res_attrs_to_update = res_attrs_to_update
+        logging.info("Sending Decision from Worker to Sub_Co-> " + str(req.hashMap[req.sub_id]))
+        send(('decisionFromWorker', req), to=req.hashMap[req.sub_id])
 
-        send('decionFromWorker', req)
-
-def DB_Emulator:
+class DB_Emulator(process):
     def setup():
+        pass
 
     def run():
+        pass
+
+def main():
+    logging.basicConfig(filename='policy_eval.log',level=logging.DEBUG)
+    hashMap = {}
+    sub_id = "employee"
+    res_id = "bank A"
+    worker = new(Worker, [], num = 1)
+    sub_co = new(Sub_Co, [], num = 1)
+    res_co = new(Res_Co, [worker], num = 1)
+
+    hashMap[sub_id] = sub_co
+    hashMap[res_id] = res_co
+
+    app = new(Application, [hashMap], num = 1)
+
+    start(app| sub_co | res_co | worker)
