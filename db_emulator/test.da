@@ -1,0 +1,29 @@
+import da
+
+class p(process):
+    def setup(num_req:int):
+        pass
+    def run():
+        await(len(listof(p, received(('Ping',), from_=p))) == num_req)
+
+    def receive(msg = ('Ping',), from_= p):
+        output("Message from = " + str(p) + " ping")
+        send(('Pong', ), to = p)
+
+
+class c(process):
+    def setup(server:p):
+        pass
+    def run():
+        send(('Ping', ), to=server)
+        await(len(listof(p, received(('Pong',), from_=p))) == 1)
+
+    def receive(msg = ('Pong',), from_= p):
+        output("Message from p recvd pong = " + str(p))
+def main():
+    config(channel="fifo")
+    server = new(p,[2], num = 1)
+    client = new(c, num = 2)
+    for i in client:
+        setup(i, (server))
+    start(server | client)
