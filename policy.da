@@ -2,6 +2,7 @@ import sys
 import time
 import random
 import logging
+import configparser
 
 class Request:
     def __init__(self, sub_id, res_id, h):
@@ -96,7 +97,7 @@ class Sub_Co(process):
                     # Cleanup and Restart
                     procs[self.id] = "Restarted"
                     # Restart Code
-                    logging.info("Subject Conflict Found. Restart-> " + self.id)
+                    logging.info("Subject Conflict Found. Restart-> " + str(self.id))
                     send(('evalRequestFromApp', req), to = req.app_id)
                     break
 
@@ -234,16 +235,31 @@ class DB_Emulator(process):
 
 def main():
     logging.basicConfig(filename='policy_eval.log',level=logging.DEBUG)
+    
+    # reading input from the config file
+    config = configparser.ConfigParser()
+    config.read('request.config')
+    
+    output(str(config.sections()))
+    master_sec = config['Master']
+    num_of_clients = int(master_sec['no_of_clients'])
+    num_of_sub_co =  int(master_sec['no_of_sub_co'])
+    num_of_res_co =  int(master_sec['no_of_res_co'])
+    num_of_workers = int(master_sec['no_of_workers'])
+    
+    output(num_of_clients)
+
     hashMap = {}
     sub_id = "employee"
     res_id = "bank A"
-    worker = new(Worker, [], num = 1)
-    sub_co = new(Sub_Co, [], num = 1)
-    res_co = new(Res_Co, [worker], num = 1)
+
+    worker = new(Worker, [], num = num_of_workers)
+    sub_co = new(Sub_Co, [], num = num_of_sub_co)
+    res_co = new(Res_Co, [worker], num = num_of_res_co)
 
     hashMap[sub_id] = sub_co
     hashMap[res_id] = res_co
 
-    app = new(Application, [hashMap], num = 1)
+    app = new(Application, [hashMap], num = num_of_clients)
 
     start(app| sub_co | res_co | worker)
