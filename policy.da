@@ -5,7 +5,7 @@ import logging
 import configparser
 
 class Request:
-    def __init__(self, sub_id, res_id, h):
+    def __init__(self, sub_id, res_id, h, sub_attrs=None, res_attrs = None):
         self.sub_id = sub_id
         self.res_id = res_id
         self.timestamp = time.time()
@@ -22,9 +22,16 @@ class Application(process):
         pass
     def run():
         #Read Sub_ID and Red_ID from config file. Create an object of Request
-        sub_id = "employee"
-        res_id = "bank A"
-        req = Request(sub_id, res_id, hashMap)
+        app_config = configparser.ConfigParser()
+        app_config.read('request.config')
+
+        app_section = app_config['Application']
+        sub_id = app_section['sub_id']
+        res_id = app_section['res_id']
+        sub_attrs = app_section['sub_attrs']
+        res_attrs = app_section['res_attrs']
+        
+        req = Request(sub_id,res_id, hashMap, sub_attrs,  res_attrs)
 
         req.app_id = self.id
 
@@ -240,7 +247,7 @@ def main():
     config = configparser.ConfigParser()
     config.read('request.config')
     
-    output(str(config.sections()))
+    
     master_sec = config['Master']
     num_of_clients = int(master_sec['no_of_clients'])
     num_of_sub_co =  int(master_sec['no_of_sub_co'])
