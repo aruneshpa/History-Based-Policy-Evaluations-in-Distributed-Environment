@@ -282,7 +282,13 @@ class Master(process):
         send(('done',), to=(app|sub_co|res_co|worker))
 
 def main():
-    logging.basicConfig(filename='policy_eval.log',level=logging.DEBUG)
+    #logging.basicConfig(filename='policy_eval.log',level=logging.DEBUG)
+    logging.getLogger('').handlers = []
+
+    logging.basicConfig(
+    filename = "policy_eval.log",
+    filemode="w",
+    level = logging.INFO)
     
     config_file_name = 'request.config'    # take the file name from the user for different test cases
 
