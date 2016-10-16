@@ -18,8 +18,9 @@ class Request:
 
 #Process Application
 class Application(process):
-    def setup(hashMap:dict):
-        pass
+    def setup(hashMap:dict, sub_co:set, res_co:set, master_id: Master):
+        self.req_num = 0
+        
     def run():
         #Read Sub_ID and Red_ID from config file. Create an object of Request
         app_config = configparser.ConfigParser()
@@ -41,11 +42,14 @@ class Application(process):
         # take arg for now
         logging.info("Application sending Req to Sub_Co " + str(req.hashMap[sub_id]))
         send(("evalRequestFromApp", req), to=req.hashMap[sub_id])
-        await(False)
+        await(len(listof(p,received(('done',), from_=p))) == 1)
+        
+
     def receive(msg=('policyDecisionFromSub_Co', decision), from_= sub_coord_id):
         logging.info("Received Policy decision from Sub_Co at App-> " + str(self.id))
         if decision== "Success":
             output("Policy Evaluated")
+            send(('okay',), to=master_id)
 
 class Sub_Co(process):
     def setup():
@@ -58,7 +62,7 @@ class Sub_Co(process):
 
     def run():
 
-        await(False)
+        await(len(listof(p,received(('done',), from_=p))) == 1)
 
     def receive(msg=('evalRequestFromApp', req), from_= app_id):
         # Mark yourself as running. So as it is easy to check whether you were restarted later.
@@ -163,11 +167,11 @@ class Sub_Co(process):
             send(('policyDecisionFromSub_Co', "Success"), to=self.app_id)
 
 class Res_Co(process):
-    def setup(w_id:Worker):
+    def setup(workers:set):
         self.ongoingEvals = []
         self.updated_cache = {}
     def run():
-        await(False)
+        await(len(listof(p,received(('done',), from_=p))) == 1)
     def receive(msg=('evalRequestFromSub_Co', req), from_= sub_coord_id):
         logging.info("Request from Sub_Co recvd at-> " + str(self.id))
         #Append this request to Ongoing Evals
@@ -176,6 +180,8 @@ class Res_Co(process):
         for attr in req.res_attrs:
             if attr in updated_cache:
                 req.res_attrs[attr] = updated_cache[attr]
+        workers_list = [p for p in workers]
+        w_id = workers_list[random.randint(0,len(workers_list)-1)]       
         logging.info("Sending Request from Res_Co Worker-> " + str(w_id))
         send(('evalRequestFromRes_Co', req), to=w_id)
 
@@ -209,7 +215,8 @@ class Worker(process):
 
 
     def run():
-        await(False)
+        await((len(listof(p,received(('done',), from_=p))) == 1))
+
 
     def policy(req):
         sub_attrs_to_update = req.sub_attrs
@@ -240,33 +247,50 @@ class DB_Emulator(process):
     def run():
         pass
 
+class Master(process):
+    def setup(config_file_name:str):
+        pass
+    
+    def run():    
+        config = configparser.ConfigParser()
+        config.read(config_file_name)
+        output(str(config.sections()))
+
+        master_section = config['Master']
+        num_of_workers = int(master_section['num_of_workers'])
+        num_of_sub_co =  int(master_section['num_of_sub_co'])
+        num_of_res_co =  int(master_section['num_of_res_co'])
+        num_of_clients = int(master_section['num_of_clients'])
+        num_of_requests = int(master_section['num_of_request'])
+
+        output(num_of_clients)
+        hashMap = {}
+        sub_id = "employee"
+        res_id = "bank A"
+        worker = new(Worker, [], num = num_of_workers)
+        sub_co = new(Sub_Co, [], num = num_of_sub_co)
+        res_co = new(Res_Co, [worker], num = num_of_res_co)
+        sub_co_list = [p for p in sub_co]
+        res_co_list = [p for p in res_co]
+        hashMap[sub_id] = sub_co_list[random.randint(0,len(sub_co_list)-1)]
+        hashMap[res_id] = res_co_list[random.randint(0,len(res_co_list)-1)]
+        app = new(Application, [hashMap, sub_co, res_co, self.id], num = num_of_clients)
+
+        start(app| sub_co | res_co | worker)
+
+        await(len(listof(p,received(('okay',), from_=p))) == num_of_requests)
+        send(('done',), to=(app|sub_co|res_co|worker))
+
 def main():
     logging.basicConfig(filename='policy_eval.log',level=logging.DEBUG)
     
+    config_file_name = 'request.config'    # take the file name from the user for different test cases
+
     # reading input from the config file
-    config = configparser.ConfigParser()
-    config.read('request.config')
+    master = new(Master,[config_file_name], num=1)
+
+    start(master)
+
     
+
     
-    master_sec = config['Master']
-    num_of_clients = int(master_sec['no_of_clients'])
-    num_of_sub_co =  int(master_sec['no_of_sub_co'])
-    num_of_res_co =  int(master_sec['no_of_res_co'])
-    num_of_workers = int(master_sec['no_of_workers'])
-    
-    output(num_of_clients)
-
-    hashMap = {}
-    sub_id = "employee"
-    res_id = "bank A"
-
-    worker = new(Worker, [], num = num_of_workers)
-    sub_co = new(Sub_Co, [], num = num_of_sub_co)
-    res_co = new(Res_Co, [worker], num = num_of_res_co)
-
-    hashMap[sub_id] = sub_co
-    hashMap[res_id] = res_co
-
-    app = new(Application, [hashMap], num = num_of_clients)
-
-    start(app| sub_co | res_co | worker)
