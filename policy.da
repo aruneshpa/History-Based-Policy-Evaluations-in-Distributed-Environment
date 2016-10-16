@@ -18,8 +18,10 @@ class Request:
         self.res_attrs = res_attrs
         self.sub_attrs_to_update = []
         self.res_attrs_to_update = []
+        self.sub_attrs_for_policy_eval = {}
         self.hashMap = h
         self.action = action
+        self.dbEmulator = None
 
 # Data Structure for Rules
 class Rule:
@@ -36,29 +38,18 @@ class Rule:
 
 #Process Application
 class Application(process):
-    def setup(hashMap:dict, sub_co:set, res_co:set, master_id: Master, dbEmulator:DB_Emulator):
+    def setup(hashMap:dict, sub_co:set, res_co:set, master_id: Master, dbEmulator:DB_Emulator, req:Request):
         pass
 
     def run():
-        #Read Sub_ID and Red_ID from config file. Create an object of Request
-        app_config = configparser.ConfigParser()
-        app_config.read('request.config')
-
-        app_section = app_config['Application']
-        sub_id = app_section['sub_id']
-        res_id = app_section['res_id']
-        sub_attrs = app_section['sub_attrs']
-        res_attrs = app_section['res_attrs']
-        action = app_section['action']
-
-        req = Request(sub_id, res_id, hashMap, sub_attrs, res_attrs, action)
-        # You need the App Id to return the decision to the App.
-        req.app_id = self.id
         req.dbEmulator = dbEmulator
 
-        output("Application sending Req to Sub_Co " + str(req.hashMap[sub_id]))
-        send(("evalRequestFromApp", req), to=req.hashMap[sub_id])
-        await(len(listof(p,received(('done',), from_=p))) == 1)
+        output("Application sending Req to Sub_Co " + str(req.hashMap[req.sub_id]))
+        send(("evalRequestFromApp", req), to=req.hashMap[req.sub_id])
+
+        await(len(listof(p,received(('done',), from_=p))) == 1)    # wait till master asks to shutdown
+    def receive(msg=('done',), from_=p) :
+        output(str(self.id)+" shutting Down")
 
     def receive(msg=('policyDecisionFromSub_Co', decision), from_= sub_coord_id):
         output("Received Policy decision from Sub_Co at App-> " + str(self.id))
@@ -77,17 +68,27 @@ class Sub_Co(process):
     def run():
         await(len(listof(p,received(('done',), from_=p))) == 1)
 
+    def receive(msg=('done',), from_=p) :
+        output(str(self.id)+" shutting Down")
+
     def receive(msg=('evalRequestFromApp', req), from_= app_id):
         # Mark yourself as running. So as it is easy to check whether you were restarted later.
+
+
+
         output("Received Eval Req from App at Sub_Co-> " + str(self.id))
+        if req.app_id is None:
+            req.app_id = app_id
+
         self.procs[req] = "Running"
-        self.app_id = app_id
+        
         # Get the Attributes needed (Only reqd ones, not all of them) from the config file.
-        req.sub_attrs = {"history":"empty"}
-        req.res_attrs = {}
+        # req.sub_attrs = {"history":"empty"}
+        # req.res_attrs = {}
 
         # check if those attributes in recent and then tent
         # update the request accordingly
+        output("reading tent"+ str(tent_updated_attrs))
         for attr in req.sub_attrs:
             if attr in tent_updated_attrs:
                 # First Pref to Tent
@@ -105,24 +106,38 @@ class Sub_Co(process):
         send(('evalRequestFromSub_Co', req), to=req.hashMap[req.res_id])
 
         # When the decision arrives
+
+    def performCleanup(req):
+        req.attrs_read_from_tent = {}
+        req.attrs_read_from_cache = {}
+        req.timestamp = time.time()
+        req.sub_attrs_to_update = []
+        req.res_attrs_to_update = []
+        req.sub_attrs_for_policy_eval = {}
+        return req
+
+
     def receive(msg=('decisionFromWorker', req), from_= w_id):
         output("Decision from Worker Recvd at-> " + str(self.id))
         output("Sub obligations-> " + str(req.sub_attrs_to_update))
         output("Res obligations-> " + str(req.res_attrs_to_update))
         # Check Subject Conflict here
         conflict = None
-        if req.sub_attrs_to_update:
-            for attr in req.sub_attrs_to_update:
-                for attr in tent_updated_attrs:
-                    if tent_updated_attrs[attr]['timestamp'] > req.timestamp:
-                    # If someone has updated tent after you read from it
+        output("Tent_attr BEFORE-> " + str(tent_updated_attrs))
+        output("My Time Stamp - " + str(req.timestamp))
+        if req.sub_attrs_for_policy_eval:
+            for attr in req.sub_attrs_for_policy_eval:
+                if attr in tent_updated_attrs:
+                    if req.sub_attrs_for_policy_eval[attr] != tent_updated_attrs[attr]['value']:
+                        # If someone has updated tent after you read from it
                         # Conflict
                         conflict = "Present"
                         # Cleanup and Restart
                         procs[self.id] = "Restarted"
                         # Restart Code
-                        output("Subject Conflict Found. Restart-> " + str(self.id))
-                        send(('evalRequestFromApp', req), to = req.app_id)
+                        output("Subject Conflict Found. Restart-> " + str(req.app_id))
+                        req = performCleanup(req)
+                        send(('evalRequestFromApp', req), to = self.id)
                         break
 
         if conflict != "Present":
@@ -141,10 +156,10 @@ class Sub_Co(process):
                         tent_updated_attrs[attr]['value'] = val
                         tent_updated_attrs[attr]['timestamp'] = ts
 
-        output("Updated the tent_attr-> " + str(tent_updated_attrs))
-        output("Sending Req for Res Conflict eval to Res_Co-> " + str(req.hashMap[req.res_id]))
-        # Check for Res Conflict
-        send(('conflictEvalRequestFromSub_Co', req), to=req.hashMap[req.res_id])
+            output("Updated the tent_attr-> " + str(tent_updated_attrs))
+            output("Sending Req for Res Conflict eval to Res_Co-> " + str(req.hashMap[req.res_id]))
+            # Check for Res Conflict
+            send(('conflictEvalRequestFromSub_Co', req), to=req.hashMap[req.res_id])
 
     def receive(msg=('conflictEvalReplyFromRes_Co', conflict_decision, req), from_= res_coord_id):
         output("Received Conflict eval reply from Res_Co at-> " + str(self.id))
@@ -181,8 +196,8 @@ class Sub_Co(process):
                     updated_cache[attr] = req.sub_attrs_to_update[attr]
             output("Sub_Co Committing updates to DB")
             send(('updateSubAttrs', updated_cache, req.sub_id), to=req.dbEmulator)
-            output("Sending Policy Decision from Sub_Co to App-> " + str(self.app_id))
-            send(('policyDecisionFromSub_Co', "Success"), to=self.app_id)
+            output("Sending Policy Decision from Sub_Co to App-> " + str(req.app_id))
+            send(('policyDecisionFromSub_Co', "Success"), to=req.app_id)
 
 class Res_Co(process):
     def setup(workers:set):
@@ -191,6 +206,9 @@ class Res_Co(process):
 
     def run():
         await(len(listof(p,received(('done',), from_=p))) == 1)
+
+    def receive(msg=('done',), from_=p) :
+        output(str(self.id)+" shutting Down")
 
     def receive(msg=('evalRequestFromSub_Co', req), from_= sub_coord_id):
         output("Request from Sub_Co recvd at-> " + str(self.id))
@@ -335,6 +353,9 @@ class Worker(process):
         self.rules = create_rules('policy-example.xml')
         await((len(listof(p,received(('done',), from_=p))) == 1))
 
+    def receive(msg=('done',), from_=p) :
+        output(str(self.id)+" shutting Down")
+
     def receive(msg=('evalRequestFromRes_Co', req), from_= res_coord_id):
         output("Received Request from Res_Co at-> " + str(self.id))
         # Here is how it will all go (In Order)-
@@ -352,6 +373,8 @@ class Worker(process):
                 if req.sub_id in sub_attr_dict and attr in sub_attr_dict[req.sub_id]:
                     sub_attrs_for_policy_eval[attr] = sub_attr_dict[req.sub_id][attr]
 
+        output("Value Read before Rule-- " + str(sub_attrs_for_policy_eval))
+        req.sub_attrs_for_policy_eval = sub_attrs_for_policy_eval
         (sub_attrs_to_update, res_attrs_to_update) = policy(req, sub_attrs_for_policy_eval)
         req.sub_attrs_to_update = sub_attrs_to_update
         req.res_attrs_to_update = res_attrs_to_update
@@ -366,8 +389,8 @@ class DB_Emulator(process):
     def setup(workers:set):
         self.sub_attr_dict = dict()             # Dict to hold the subject:attribute mapping
         self.res_attr_dict = dict()             # Dict to hold the resource:attribute mapping
-        self.minDBLatency = 0
-        self.maxDBLatency = 0
+        self.minDBLatency = 0.0
+        self.maxDBLatency = 1.0
     def run():
         ###
         #   Here we read from the DB_Config file to upload the attributes in the DB
@@ -395,6 +418,7 @@ class DB_Emulator(process):
         res_id = res_section['res_id'].strip()
         res_attrs_list = res_section['res_attrs'].strip().split(',')
         attr_dict = {}          # Temp Dict to hold all the attrs for a particular subject
+
         if len(res_attrs_list) >=1 and all(v for v in res_attrs_list):
             for attrs in res_attrs_list:
                 attr_dict[attrs.strip().split(':')[0]] = attrs.strip().split(':')[1]
@@ -414,6 +438,9 @@ class DB_Emulator(process):
         output("Dumping the DataBase")
         output("Subject DataBase-> " + str(sub_attr_dict))
         output("Resource DataBase-> " + str(res_attr_dict))
+        output(str(self.id)+" shutting Down")
+
+        
 
     def receive(msg=('getSubAttrs', sub_attrs, sub_id), from_= w_id):
     ###
@@ -478,26 +505,80 @@ class Master(process):
         num_of_workers = int(master_section['num_of_workers'])
         num_of_sub_co =  int(master_section['num_of_sub_co'])
         num_of_res_co =  int(master_section['num_of_res_co'])
-        num_of_clients = int(master_section['num_of_clients'])
-        num_of_requests = int(master_section['num_of_request'])
+
+        sub_id_section = config['sub-id-list']
+        res_id_section = config['res-id-list']
 
         hashMap = {}
-        sub_id = "employee"
-        res_id = "bank B"
         workers = new(Worker, [], num = num_of_workers)
         sub_co = new(Sub_Co, [], num = num_of_sub_co)
         res_co = new(Res_Co, [workers], num = num_of_res_co)
-        dbEmulator = new(DB_Emulator, [workers], num= 1)
+        dbEmulator = new(DB_Emulator, [workers], num = 1)
         sub_co_list = [p for p in sub_co]
         res_co_list = [p for p in res_co]
-        hashMap[sub_id] = sub_co_list[random.randint(0,len(sub_co_list)-1)]
-        hashMap[res_id] = res_co_list[random.randint(0,len(res_co_list)-1)]
-        app = new(Application, [hashMap, sub_co, res_co, self.id, dbEmulator], num = num_of_clients)
 
-        start(app| sub_co | res_co | workers | dbEmulator)
+
+        sub_id_list = sub_id_section['sub_id_list'].strip().split(',')
+        res_id_list = res_id_section['res_id_list'].strip().split(',')
+        i = 0
+        for sub_id in sub_id_list:
+            hashMap[sub_id] = sub_co_list[i]
+            i = i + 1
+            i = (i % num_of_sub_co)
+        i = 0
+        for res_id in res_id_list:
+            hashMap[res_id] = res_co_list[i]
+            i = i + 1
+            i = (i % num_of_res_co)
+
+
+        output("Mapping--- " + str(hashMap))
+                
+
+        app_section = config['Application']
+        num_of_requests = int(app_section['num_of_request'])
+        output("number of Request:" + str(num_of_requests))
+    
+        for i in range(1, num_of_requests +1):
+            req = app_section[str(i)].strip().split(",")
+            sub_attrs = {}
+            res_attrs = {}
+            for elem in req:
+                elem = elem.split("=")
+                if elem[0].strip() == "sub_id":
+                    sub_id = elem[1]
+                    sub_id_list.append(sub_id)
+                elif elem[0].strip() == "sub_attrs" and elem[1].strip() != "None":
+                    sub_attrs_list = elem[1].split('|')
+                    for e in sub_attrs_list:
+                        sub_attrs[e.split(':')[0]] = e.split(':')[1]
+                elif elem[0].strip() == "res_id":
+                    res_id = elem[1]
+                    res_id_list.append(res_id)
+                elif elem[0].strip() == "res_attrs" and elem[1].strip() != "None":
+                    res_attrs_list = elem[1].split('|')
+                    for e in res_attrs_list:
+                        res_attrs[e.split(':')[0]] = e.split(':')[1]
+                elif elem[0].strip() == "action":
+                    action = elem[1]
+
+            req = Request(sub_id, res_id, hashMap, sub_attrs, res_attrs, action)   # creating a new object
+            app = new(Application, [hashMap, sub_co, res_co, self.id,dbEmulator,req], num = 1)
+            output(str(app))            
+            start(app)
+
+
+        #app = new(Application, [hashMap, sub_co, res_co, self.id, dbEmulator], num = num_of_clients)
+
+        start(sub_co | res_co | workers | dbEmulator)
 
         await(len(listof(p,received(('okay',), from_=p))) == num_of_requests)
-        send(('done',), to=(app | sub_co | res_co | workers | dbEmulator))
+        send(('done',), to=(sub_co | res_co | workers | dbEmulator))
+        output(str(self.id)+" shutting Down")
+    
+    def receive(msg=('okay',), from_=p):
+        send(('done',), to=p)
+
 
 def main():
     logging.getLogger('').handlers = []
