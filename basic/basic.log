@@ -1,0 +1,52 @@
+OUTPUT:policy.Master:['Master', 'sub-id-list', 'res-id-list', 'Application']
+OUTPUT:policy.Master:Mapping: {'employee': <Sub_Co('localhost', 22884)>, 'bank A': <Res_Co('localhost', 26475)>}
+OUTPUT:policy.Master:number of Request:1
+OUTPUT:policy.Master:{<Application('localhost', 18317)>}
+OUTPUT:policy.Application:Application sending Req to Sub_Co ('localhost', 22884)
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 14794)
+OUTPUT:policy.Sub_Co:Received Eval Req from App at Sub_Co-> ('localhost', 22884)
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 14794)
+OUTPUT:policy.Sub_Co:reading tent{}
+OUTPUT:policy.Sub_Co:Request Updated with Tent and Cache
+OUTPUT:policy.Sub_Co:Final Req Object is-> <policy.Request object at 0x102c32438>
+OUTPUT:policy.Sub_Co:Sub_Co Sending Eval Request to Res_Co-> ('localhost', 26475)
+OUTPUT:policy.Res_Co:Request from Sub_Co recvd at-> ('localhost', 26475)
+OUTPUT:policy.Res_Co:Sending Request from Res_Co Worker-> ('localhost', 14794)
+OUTPUT:policy.Worker:Received Request from Res_Co at-> ('localhost', 14794)
+OUTPUT:policy.Worker:Value Read before Rule-- {'history': 'empty'}
+OUTPUT:policy.Worker:Found a Matching Rule
+OUTPUT:policy.Worker:Sending Decision from Worker to Sub_Co-> ('localhost', 22884)
+OUTPUT:policy.Sub_Co:Decision from Worker Recvd at-> ('localhost', 22884)
+OUTPUT:policy.Sub_Co:Sub obligations-> {'history': 'bank A'}
+OUTPUT:policy.Sub_Co:Res obligations-> {}
+OUTPUT:policy.Sub_Co:Tent_attr BEFORE-> {}
+OUTPUT:policy.Sub_Co:My Time Stamp - 1476669287.007395
+OUTPUT:policy.Sub_Co:Subject Conflict-> Absent.
+OUTPUT:policy.Sub_Co:Updated the tent_attr-> {'history': {'timestamp': 1476669287.007395, 'value': 'bank A'}}
+OUTPUT:policy.Sub_Co:Sending Req for Res Conflict eval to Res_Co-> ('localhost', 26475)
+OUTPUT:policy.Res_Co:Received Req for Res Conflict eval at-> ('localhost', 26475)
+OUTPUT:policy.Res_Co:No Conflict at the Resource Coordinator
+OUTPUT:policy.Res_Co:Res Co Committing updates to DB
+OUTPUT:policy.Res_Co:Send No Conflict msg to Sub_Co-> ('localhost', 22884)
+OUTPUT:policy.DB_Emulator:Recvd req to update by res co-> ('localhost', 26475)
+OUTPUT:policy.DB_Emulator:Latency Chosen by the DB-> 1.69234857569962
+OUTPUT:policy.Sub_Co:Received Conflict eval reply from Res_Co at-> ('localhost', 22884)
+OUTPUT:policy.Sub_Co:No Conflict. Going to Commit.
+OUTPUT:policy.Sub_Co:Sub_Co Committing updates to DB
+OUTPUT:policy.Sub_Co:Sending Policy Decision from Sub_Co to App-> ('localhost', 18317)
+OUTPUT:policy.Application:Received Policy decision from Sub_Co at App-> ('localhost', 18317)
+OUTPUT:policy.Application:Policy Evaluated
+OUTPUT:policy.Application:('localhost', 18317) shutting Down
+OUTPUT:policy.Master:('localhost', 31351) shutting Down
+OUTPUT:policy.Sub_Co:('localhost', 22884) shutting Down
+OUTPUT:policy.Worker:('localhost', 14794) shutting Down
+OUTPUT:policy.Res_Co:('localhost', 26475) shutting Down
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 14794)
+OUTPUT:policy.DB_Emulator:Recvd req to update by Sub_Co-> ('localhost', 22884)
+OUTPUT:policy.DB_Emulator:Latency Chosen by the DB-> 1.0628072048007122
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 14794)
+OUTPUT:policy.DB_Emulator:DONE recvd at the dbEmulator
+OUTPUT:policy.DB_Emulator:Dumping the DataBase
+OUTPUT:policy.DB_Emulator:Subject DataBase-> {'employee': {'history': 'bank A'}}
+OUTPUT:policy.DB_Emulator:Resource DataBase-> {'bank B': {}}
+OUTPUT:policy.DB_Emulator:('localhost', 38822) shutting Down

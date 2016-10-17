@@ -1,0 +1,98 @@
+OUTPUT:policy.Master:['Master', 'sub-id-list', 'res-id-list', 'Application']
+OUTPUT:policy.Master:Mapping: {'employee': <Sub_Co('localhost', 19057)>, 'bank B': <Res_Co('localhost', 26789)>, 'bank A': <Res_Co('localhost', 23072)>, 'manager': <Sub_Co('localhost', 10742)>}
+OUTPUT:policy.Master:number of Request:2
+OUTPUT:policy.Master:{<Application('localhost', 16588)>}
+OUTPUT:policy.Application:Application sending Req to Sub_Co ('localhost', 19057)
+OUTPUT:policy.Master:{<Application('localhost', 35820)>}
+OUTPUT:policy.Application:Application sending Req to Sub_Co ('localhost', 10742)
+OUTPUT:policy.Sub_Co:Received Eval Req from App at Sub_Co-> ('localhost', 19057)
+OUTPUT:policy.Sub_Co:reading tent{}
+OUTPUT:policy.Sub_Co:Request Updated with Tent and Cache
+OUTPUT:policy.Sub_Co:Final Req Object is-> <policy.Request object at 0x102999a20>
+OUTPUT:policy.Sub_Co:Sub_Co Sending Eval Request to Res_Co-> ('localhost', 23072)
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 28576)
+OUTPUT:policy.Sub_Co:Received Eval Req from App at Sub_Co-> ('localhost', 10742)
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 13327)
+OUTPUT:policy.Sub_Co:reading tent{}
+OUTPUT:policy.Sub_Co:Request Updated with Tent and Cache
+OUTPUT:policy.Sub_Co:Final Req Object is-> <policy.Request object at 0x1029998d0>
+OUTPUT:policy.Sub_Co:Sub_Co Sending Eval Request to Res_Co-> ('localhost', 23072)
+OUTPUT:policy.Res_Co:Request from Sub_Co recvd at-> ('localhost', 23072)
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 28576)
+OUTPUT:policy.Res_Co:Sending Request from Res_Co Worker-> ('localhost', 13327)
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 13327)
+OUTPUT:policy.Res_Co:Request from Sub_Co recvd at-> ('localhost', 23072)
+OUTPUT:policy.Res_Co:Sending Request from Res_Co Worker-> ('localhost', 28576)
+OUTPUT:policy.Worker:Received Request from Res_Co at-> ('localhost', 13327)
+OUTPUT:policy.Worker:Value Read before Rule-- {'history': 'empty'}
+OUTPUT:policy.Worker:Found a Matching Rule
+OUTPUT:policy.Worker:Sending Decision from Worker to Sub_Co-> ('localhost', 19057)
+OUTPUT:policy.Worker:Received Request from Res_Co at-> ('localhost', 28576)
+OUTPUT:policy.Worker:Value Read before Rule-- {}
+OUTPUT:policy.Worker:Sending Decision from Worker to Sub_Co-> ('localhost', 10742)
+OUTPUT:policy.Sub_Co:Decision from Worker Recvd at-> ('localhost', 19057)
+OUTPUT:policy.Sub_Co:Sub obligations-> {'history': 'bank A'}
+OUTPUT:policy.Sub_Co:Res obligations-> {}
+OUTPUT:policy.Sub_Co:Tent_attr BEFORE-> {}
+OUTPUT:policy.Sub_Co:My Time Stamp - 1476669452.264207
+OUTPUT:policy.Sub_Co:Subject Conflict-> Absent.
+OUTPUT:policy.Sub_Co:Updated the tent_attr-> {'history': {'value': 'bank A', 'timestamp': 1476669452.264207}}
+OUTPUT:policy.Sub_Co:Sending Req for Res Conflict eval to Res_Co-> ('localhost', 23072)
+OUTPUT:policy.Sub_Co:Decision from Worker Recvd at-> ('localhost', 10742)
+OUTPUT:policy.Sub_Co:Sub obligations-> None
+OUTPUT:policy.Sub_Co:Res obligations-> None
+OUTPUT:policy.Res_Co:Received Req for Res Conflict eval at-> ('localhost', 23072)
+OUTPUT:policy.Sub_Co:Tent_attr BEFORE-> {}
+OUTPUT:policy.Res_Co:No Conflict at the Resource Coordinator
+OUTPUT:policy.Sub_Co:My Time Stamp - 1476669452.271725
+OUTPUT:policy.Res_Co:Res Co Committing updates to DB
+OUTPUT:policy.Sub_Co:Subject Conflict-> Absent.
+OUTPUT:policy.Sub_Co:Updated the tent_attr-> {}
+OUTPUT:policy.Sub_Co:Sending Req for Res Conflict eval to Res_Co-> ('localhost', 23072)
+OUTPUT:policy.Res_Co:Send No Conflict msg to Sub_Co-> ('localhost', 19057)
+OUTPUT:policy.DB_Emulator:Recvd req to update by res co-> ('localhost', 23072)
+OUTPUT:policy.DB_Emulator:Latency Chosen by the DB-> 1.7793579024408142
+OUTPUT:policy.Res_Co:Received Req for Res Conflict eval at-> ('localhost', 23072)
+OUTPUT:policy.Res_Co:No Conflict at the Resource Coordinator
+OUTPUT:policy.Res_Co:Res Co Committing updates to DB
+OUTPUT:policy.Sub_Co:Received Conflict eval reply from Res_Co at-> ('localhost', 19057)
+OUTPUT:policy.Sub_Co:No Conflict. Going to Commit.
+OUTPUT:policy.Sub_Co:Sub_Co Committing updates to DB
+OUTPUT:policy.Sub_Co:Sending Policy Decision from Sub_Co to App-> ('localhost', 16588)
+OUTPUT:policy.Res_Co:Send No Conflict msg to Sub_Co-> ('localhost', 10742)
+OUTPUT:policy.Application:Received Policy decision from Sub_Co at App-> ('localhost', 16588)
+OUTPUT:policy.Application:Policy Evaluated
+OUTPUT:policy.Sub_Co:Received Conflict eval reply from Res_Co at-> ('localhost', 10742)
+OUTPUT:policy.Sub_Co:No Conflict. Going to Commit.
+OUTPUT:policy.Sub_Co:Sub_Co Committing updates to DB
+OUTPUT:policy.Sub_Co:Sending Policy Decision from Sub_Co to App-> ('localhost', 35820)
+OUTPUT:policy.Application:Received Policy decision from Sub_Co at App-> ('localhost', 35820)
+OUTPUT:policy.Application:Policy Evaluated
+OUTPUT:policy.Application:('localhost', 16588) shutting Down
+OUTPUT:policy.Application:('localhost', 35820) shutting Down
+OUTPUT:policy.Res_Co:('localhost', 23072) shutting Down
+OUTPUT:policy.Worker:('localhost', 28576) shutting Down
+OUTPUT:policy.Sub_Co:('localhost', 19057) shutting Down
+OUTPUT:policy.Master:('localhost', 38566) shutting Down
+OUTPUT:policy.Worker:('localhost', 13327) shutting Down
+OUTPUT:policy.Res_Co:('localhost', 26789) shutting Down
+OUTPUT:policy.Sub_Co:('localhost', 10742) shutting Down
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 28576)
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 13327)
+OUTPUT:policy.DB_Emulator:Recvd req to update by Sub_Co-> ('localhost', 19057)
+OUTPUT:policy.DB_Emulator:Latency Chosen by the DB-> 1.8522468327623307
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 28576)
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 13327)
+OUTPUT:policy.DB_Emulator:Recvd req to update by res co-> ('localhost', 23072)
+OUTPUT:policy.DB_Emulator:Latency Chosen by the DB-> 1.2713176245565567
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 28576)
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 13327)
+OUTPUT:policy.DB_Emulator:Recvd req to update by Sub_Co-> ('localhost', 10742)
+OUTPUT:policy.DB_Emulator:Latency Chosen by the DB-> 1.678937671015198
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 28576)
+OUTPUT:policy.DB_Emulator:Sending updates to worker-> ('localhost', 13327)
+OUTPUT:policy.DB_Emulator:DONE recvd at the dbEmulator
+OUTPUT:policy.DB_Emulator:Dumping the DataBase
+OUTPUT:policy.DB_Emulator:Subject DataBase-> {'employee': {'history': 'bank A'}}
+OUTPUT:policy.DB_Emulator:Resource DataBase-> {'bank B': {}}
+OUTPUT:policy.DB_Emulator:('localhost', 31081) shutting Down

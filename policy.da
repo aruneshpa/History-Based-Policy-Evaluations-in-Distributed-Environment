@@ -386,7 +386,7 @@ class Worker(process):
         self.res_attr_dict = res_attr_dict
 
 class DB_Emulator(process):
-    def setup(workers:set):
+    def setup(workers:set, db_config_file:str):
         self.sub_attr_dict = dict()             # Dict to hold the subject:attribute mapping
         self.res_attr_dict = dict()             # Dict to hold the resource:attribute mapping
         self.minDBLatency = 0.0
@@ -397,7 +397,7 @@ class DB_Emulator(process):
         #   Only for the first time though.
         ###
         config = configparser.ConfigParser()
-        config.read('dbconfig.config')
+        config.read(db_config_file)
 
         # This section parses the config file to create the final sub_attr_dict
         sub_section = config["Subject"]
@@ -492,7 +492,7 @@ class DB_Emulator(process):
             send(('resAttrsFromDB', self.res_attr_dict), to=w_id)
 
 class Master(process):
-    def setup(config_file_name:str):
+    def setup(config_file_name:str, db_config_file:str):
         pass
 
 
@@ -513,7 +513,7 @@ class Master(process):
         workers = new(Worker, [], num = num_of_workers)
         sub_co = new(Sub_Co, [], num = num_of_sub_co)
         res_co = new(Res_Co, [workers], num = num_of_res_co)
-        dbEmulator = new(DB_Emulator, [workers], num = 1)
+        dbEmulator = new(DB_Emulator, [workers,db_config_file], num = 1)
         sub_co_list = [p for p in sub_co]
         res_co_list = [p for p in res_co]
 
@@ -532,7 +532,7 @@ class Master(process):
             i = (i % num_of_res_co)
 
 
-        output("Mapping--- " + str(hashMap))
+        output("Mapping: " + str(hashMap))
                 
 
         app_section = config['Application']
@@ -581,10 +581,15 @@ class Master(process):
 
 
 def main():
-    logging.getLogger('').handlers = []
-    logging.basicConfig(filename = "policy_eval.log",filemode="w",level = logging.INFO)
-    config_file_name = 'request.config'    # take the file name from the user for different test cases
+    config_file_name = str(sys.argv[1]) if len(sys.argv) > 1 else   'basic.config'
+    db_config_file  =  str(sys.argv[2]) if len(sys.argv) > 2  else  'dbconfig.config'
+    
+    log_file_name = config_file_name.strip().split(".")[0]+".log"
 
-    # reading input from the config file
-    master = new(Master,[config_file_name], num=1)
+    output(log_file_name)
+
+    logging.getLogger('').handlers = []
+    logging.basicConfig(filename = log_file_name,filemode="w",level = logging.INFO)
+
+    master = new(Master,[config_file_name,db_config_file], num=1)
     start(master)
